@@ -1,30 +1,37 @@
 from abc import ABC, abstractmethod
+from utils import Validator
 
 
-# Общий интерфейс расчёта стоимости для всех тарифов
+# Абстрактный родитель для тарифов: задаёт обязательный метод расчёта.
+# Создать Tariff() напрямую нельзя — нужны дочерние классы.
 class Tariff(ABC):
+
+    # Каждый дочерний тариф обязан реализовать этот метод
     @abstractmethod
     def calculate_price(self, distance):
         pass
 
 
-# Стандарт: 10 за подачу + 3 за каждый километр
+# Тариф «Стандарт»: наследует общий интерфейс Tariff
 class StandardTariff(Tariff):
+
+    # Атрибут класса: название тарифа для хранения в заказе
+    name = "standard"
+
+    # Проверяем расстояние и считаем цену: подача 10 + 3 за километр.
+    # При неверном расстоянии Validator вызовет ValueError.
     def calculate_price(self, distance):
+        Validator.number(distance, "Расстояние")
         return 10 + 3 * distance
 
 
-# Комфорт: 20 за подачу + 5 за каждый километр
+# Тариф «Комфорт»: тот же интерфейс, но другая стоимость
 class ComfortTariff(Tariff):
+
+    # Через объект тарифа название доступно как tariff.name
+    name = "comfort"
+
+    # Проверяем расстояние и считаем цену: подача 20 + 5 за километр
     def calculate_price(self, distance):
+        Validator.number(distance, "Расстояние")
         return 20 + 5 * distance
-
-
-# Проверяем оба тарифа на расстоянии 5 км
-tariffs = [
-    StandardTariff(),
-    ComfortTariff()
-]
-
-for tariff in tariffs:
-    print(tariff.calculate_price(5))

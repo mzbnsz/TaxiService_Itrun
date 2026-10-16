@@ -5,3 +5,4 @@ __pycache__/
 .idea/
 .DS_Store
 data/taxi_data.json
+tests/test_taxi_service.py

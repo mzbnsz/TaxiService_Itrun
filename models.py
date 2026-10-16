@@ -2,6 +2,7 @@
 
 
 from abc import ABC, abstractmethod
+from utils import Validator
 
 
 # Абстрактный родительский класс для всех пользователей
@@ -9,9 +10,23 @@ class User(ABC):
 
     # Инициализация общих данных пользователя
     def __init__(self, user_id, name, phone):
-        self.user_id = user_id
-        self.name = name
-        self.phone = phone
+        self.user_id = Validator.identifier(user_id)
+        self.name = Validator.text(name, "Имя")
+        self.phone = Validator.phone(phone)
+
+    # Изменяем данные только после проверки
+    def update_name(self, new_name):
+        self.name = Validator.text(new_name, "Имя")
+
+    def update_phone(self, new_phone):
+        self.phone = Validator.phone(new_phone)
+
+    def to_dict(self):
+        return {"user_id": self.user_id, "name": self.name, "phone": self.phone}
+
+    @classmethod
+    def from_dict(cls, data):
+        return cls(data["user_id"], data["name"], data["phone"])
 
     # Обязательный метод получения информации
     @abstractmethod
@@ -43,7 +58,20 @@ class Driver(User):
     # Возвращаем информацию о водителе
     def get_info(self):
         return (f"Driver ID:{self.user_id}, Name:{self.name}, Phone:{self.phone}, "
-                f"Car:{self.car}, Available:{self.is_available}")
+                f"Car:{self.car.get_info()}, Available:{self.is_available}")
+
+    def to_dict(self):
+        data = super().to_dict()
+        data.update(car=self.car.to_dict(), is_available=self.is_available)
+        return data
+
+    @classmethod
+    def from_dict(cls, data):
+        driver = cls(data["user_id"], data["name"], data["phone"], Car.from_dict(data["car"]))
+        if type(data["is_available"]) is not bool:
+            raise ValueError("Некорректный статус водителя")
+        driver._is_available = data["is_available"]
+        return driver
 
     # Получаем статус водителя через property
     @property
@@ -70,10 +98,20 @@ class Car:
 
     # Инициализация характеристик автомобиля
     def __init__(self, brand, model, plate_number, category):
-        self.brand = brand
-        self.model = model
-        self.plate_number = plate_number
-        self.category = category
+        self.brand = Validator.text(brand, "Марка")
+        self.model = Validator.text(model, "Модель")
+        self.plate_number = Validator.text(plate_number, "Номер машины").upper()
+        self.category = Validator.text(category, "Категория").lower()
+        if self.category not in ("standard", "comfort"):
+            raise ValueError("Категория должна быть standard или comfort")
+
+    def to_dict(self):
+        return {"brand": self.brand, "model": self.model,
+                "plate_number": self.plate_number, "category": self.category}
+
+    @classmethod
+    def from_dict(cls, data):
+        return cls(data["brand"], data["model"], data["plate_number"], data["category"])
 
     # Возвращаем информацию об автомобиле
     def get_info(self):
@@ -85,13 +123,36 @@ class Order:
 
     # Создаём заказ с начальным статусом new
     def __init__(self, order_id, passenger_id, distance, tariff_name, price):
-        self.order_id = order_id
-        self.passenger_id = passenger_id
-        self.distance = distance
+        self.order_id = Validator.identifier(order_id)
+        self.passenger_id = Validator.identifier(passenger_id)
+        self.distance = Validator.number(distance, "Расстояние")
+        if tariff_name not in ("standard", "comfort"):
+            raise ValueError("Неизвестный тариф")
         self.tariff_name = tariff_name
-        self.price = price
+        self.price = Validator.number(price, "Цена", allow_zero=True)
         self.driver_id = None
         self.status = "new"
+
+    def to_dict(self):
+        return dict(vars(self))
+
+    @classmethod
+    def from_dict(cls, data):
+        order = cls(data["order_id"], data["passenger_id"], data["distance"],
+                    data["tariff_name"], data["price"])
+        status = data["status"]
+        if status not in ("new", "accepted", "in_progress", "completed", "cancelled"):
+            raise ValueError("Неизвестный статус заказа")
+        driver_id = data["driver_id"]
+        if driver_id is not None:
+            Validator.identifier(driver_id)
+        if status == "new" and driver_id is not None:
+            raise ValueError("У нового заказа не должно быть водителя")
+        if status in ("accepted", "in_progress", "completed") and driver_id is None:
+            raise ValueError("У заказа отсутствует водитель")
+        order.driver_id = driver_id
+        order.status = status
+        return order
 
     # Возвращаем полную информацию о заказе
     def get_info(self):
@@ -105,6 +166,7 @@ class Order:
 
     # Назначаем водителя на новый заказ
     def accept(self, driver_id):
+        Validator.identifier(driver_id)
         if self.status == "new":
             self.driver_id = driver_id
             self.status = "accepted"
@@ -133,12 +195,3 @@ class Order:
         return False
 
 
-# Проверяем работу методов управления заказом
-order = Order(1, 2, 5, "standard", 25)
-
-order.accept(7)
-order.start_trip()
-
-print(order.complete_trip())  # True
-print(order.status)           # completed
-print(order.complete_trip())  # False
